@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Image Labels Generator</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; background: #f5f5f5; }
+    h1 { font-size: 24px; }
+    .preview { max-width: 300px; margin-top: 10px; display: none; border: 1px solid #ccc; }
+    .labels { margin-top: 20px; padding: 10px; background: #fff; border-radius: 8px; }
+    .label-item { padding: 5px 0; border-bottom: 1px solid #eee; }
+  </style>
+</head>
+<body>
+  <h1>Image Labels Generator using Amazon Rekognition</h1>
+  <p>Upload an image and click Analyze to get AI-generated labels.</p>
+
+  <input type="file" id="imageInput" accept="image/*">
+  <button id="analyzeBtn">Analyze</button>
+
+  <div>
+    <img id="preview" class="preview" src="" alt="Preview">
+  </div>
+
+  <div id="status"></div>
+  <div class="labels" id="labelsContainer"></div>
+
+  <script>
+    const apiUrl = "https://urkjs7wuii.execute-api.ap-south-1.amazonaws.com/labels";
+
+    const imageInput = document.getElementById('imageInput');
+    const analyzeBtn = document.getElementById('analyzeBtn');
+    const preview = document.getElementById('preview');
+    const statusDiv = document.getElementById('status');
+    const labelsContainer = document.getElementById('labelsContainer');
+
+    let selectedFile = null;
+
+    imageInput.addEventListener('change', (e) => {
+      selectedFile = e.target.files[0];
+      if (selectedFile) {
+        const reader = new FileReader();
+        reader.onload = function(ev) {
+          preview.src = ev.target.result;
+          preview.style.display = 'block';
+        };
+        reader.readAsDataURL(selectedFile);
+      }
+    });
+
+    analyzeBtn.addEventListener('click', async () => {
+      if (!selectedFile) {
+        alert("Please choose an image first.");
+        return;
+      }
+
+      statusDiv.textContent = "Analyzing image...";
+      labelsContainer.innerHTML = "";
+
+      const base64Image = await fileToBase64(selectedFile);
+      const cleanBase64 = base64Image.split(",")[1];
+
+      try {
+        const response = await fetch(apiUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ image: cleanBase64 })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          statusDiv.textContent = "Error: " + (data.error || "Unknown error");
+          return;
+        }
+
+        statusDiv.textContent = "Labels detected:";
+        if (!data.labels || data.labels.length === 0) {
+          labelsContainer.textContent = "No labels found.";
+          return;
+        }
+
+        data.labels.forEach(lbl => {
+          const div = document.createElement("div");
+          div.className = "label-item";
+          div.textContent = `${lbl.name} (${lbl.confidence}%)`;
+          labelsContainer.appendChild(div);
+        });
+
+      } catch (err) {
+        statusDiv.textContent = "Error calling API.";
+      }
+    });
+
+    function fileToBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = error => reject(error);
+        reader.readAsDataURL(file);
+      });
+    }
+  </script>
+</body>
+</html>
